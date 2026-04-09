@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface2: #23232f;
+  --border: #2e2e3e;
+  --text: #e8e8f0;
+  --muted: #7878a0;
+  --accent: #ff7a45;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Score ring animation */
+@keyframes ring-fill {
+  from { stroke-dashoffset: 251; }
+  to   { stroke-dashoffset: var(--target); }
+}
+.score-ring-circle {
+  animation: ring-fill 1s ease-out forwards;
+}

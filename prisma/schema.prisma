@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Asset types (peachcoins, tickets, cards, boosters, etc.) ────────────────
+
+model AssetType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  icon        String   @default("🎁")
+  description String?
+  color       String   @default("#6366f1")
+  isPremium   Boolean  @default(false)   // premium = spending currency
+  // valueWeight: how much 1 unit is worth relative to other assets
+  // e.g. 1 peachcoin = 1.0, 1 ticket = 5.0, 1 booster = 10.0
+  valueWeight Float    @default(1.0)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  rewards Reward[]
+}
+
+// ─── Event types (daily free gift, daily wheel, peachcoin wheel, etc.) ────────
+
+model Event {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  // daily | weekly | monthly | once
+  frequency   String   @default("daily")
+  icon        String   @default("🎡")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  seasonEvents SeasonEvent[]
+}
+
+// ─── Seasons ──────────────────────────────────────────────────────────────────
+
+model Season {
+  id          String   @id @default(cuid())
+  name        String
+  number      Int      @unique
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  seasonEvents SeasonEvent[]
+  metrics      SeasonMetric[]
+}
+
+// ─── Season × Event junction (with per-season reward config) ─────────────────
+
+model SeasonEvent {
+  id        String  @id @default(cuid())
+  seasonId  String
+  eventId   String
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+  notes     String?
+
+  season  Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  event   Event   @relation(fields: [eventId], references: [id])
+  rewards Reward[]
+
+  @@unique([seasonId, eventId])
+}
+
+// ─── Rewards: one row per (seasonEvent × assetType) ──────────────────────────
+
+model Reward {
+  id            String  @id @default(cuid())
+  seasonEventId String
+  assetTypeId   String
+  // For deterministic events (daily gift): minAmount = maxAmount
+  // For randomised events (wheel): use min/max + probability
+  minAmount     Float
+  maxAmount     Float
+  // 0.0 – 1.0: probability this asset appears on a spin/draw
+  probability   Float   @default(1.0)
+  // Optional tier label: "bronze" | "silver" | "gold"
+  tier          String?
+  notes         String?
+
+  seasonEvent SeasonEvent @relation(fields: [seasonEventId], references: [id], onDelete: Cascade)
+  assetType   AssetType   @relation(fields: [assetTypeId], references: [id])
+
+  @@unique([seasonEventId, assetTypeId])
+}
+
+// ─── Season performance metrics (manual entry + Amplitude sync) ───────────────
+
+model SeasonMetric {
+  id             String   @id @default(cuid())
+  seasonId       String
+  date           DateTime @default(now())
+  // Retention (0–100 %)
+  retentionD1    Float?
+  retentionD7    Float?
+  retentionD30   Float?
+  // Engagement
+  dau            Int?
+  avgSessionMin  Float?
+  // Monetisation
+  arpu           Float?   // average revenue per user (€/$)
+  conversionRate Float?   // % of free players who paid
+  // Source of these numbers
+  source         String   @default("manual") // "manual" | "amplitude"
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+}
+
+// ─── Amplitude integration settings (singleton row) ──────────────────────────
+
+model AmplitudeConfig {
+  id         String    @id @default("singleton")
+  apiKey     String    @default("")
+  secretKey  String    @default("")
+  projectId  String    @default("")
+  lastSyncAt DateTime?
+  updatedAt  DateTime  @updatedAt
+}
